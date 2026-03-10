@@ -1,5 +1,6 @@
 # Render デプロイ用: api + python の依存関係を統合
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
+python-multipart>=0.0.9
 pandas>=2.0.0
 openpyxl>=3.1.0
