@@ -1,0 +1,12 @@
+{
+  "type": "symptom_disease",
+  "stats": {
+    "total_residents": 0,
+    "avg_overall_rate": 0,
+    "avg_approval_rate": 0,
+    "total_alerts": 0
+  },
+  "residents": [],
+  "alerts": [],
+  "items": []
+}

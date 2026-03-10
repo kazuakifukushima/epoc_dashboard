@@ -1,0 +1,16 @@
+# Netlify デプロイ設定
+# フロントエンド（静的）を Netlify にデプロイ
+# Excel 処理は Render の API が担当
+#
+# リポジトリルートが epoc_dashboard の場合: base = "nextjs-app"
+# リポジトリルートが親フォルダの場合: Netlify の Root directory を epoc_dashboard に設定
+
+[build]
+  base = "nextjs-app"
+  command = "npm run build:static"
+  publish = "out"
+
+[build.environment]
+  # ビルド時に設定。Netlify の Site settings > Environment variables で
+  # NEXT_PUBLIC_VISUALIZE_API_URL に Render API の URL を設定してください
+  # 例: https://epoc-visualize-api.onrender.com

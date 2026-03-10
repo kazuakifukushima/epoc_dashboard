@@ -1,0 +1,19 @@
+# Render デプロイ設定
+# https://render.com で API をデプロイする際に使用
+# リポジトリの Root Directory を epoc_dashboard に設定するか、
+# このファイルをリポジトリルートに置いてください
+services:
+  - type: web
+    name: epoc-visualize-api
+    runtime: python
+    region: singapore
+
+    buildCommand: |
+      pip install -r api/requirements.txt
+      pip install -r python/requirements.txt
+
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
