@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import Dashboard from "./Dashboard";
+import { parseExcelToDashboard } from "../lib/excelParser";
 import { Activity, FileText, CheckSquare, Upload, Download, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 
 type FileType = "symptom_disease" | "evaluation" | "case_summary";
@@ -106,30 +107,16 @@ export default function UploadForm() {
     }
 
     setStatus("loading");
-    setMessage("Pythonで解析中です。しばらくお待ちください...");
+    setMessage("Excel を解析中です...");
     setDashboardData(null);
     setExcelDownload(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("fileType", fileType);
-
-      const apiBase = process.env.NEXT_PUBLIC_VISUALIZE_API_URL;
-      const endpoint = apiBase ? `${apiBase.replace(/\/$/, "")}/visualize` : "/api/visualize";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "処理に失敗しました。");
+      const result = await parseExcelToDashboard(file, fileType);
+      setDashboardData(result.dashboardData);
+      if (result.excelBase64 && result.filename) {
+        setExcelDownload({ filename: result.filename, base64: result.excelBase64 });
       }
-
-      const json = await res.json();
-      setDashboardData(json.dashboardData);
-      setExcelDownload({ filename: json.filename, base64: json.excelBase64 });
       setStatus("success");
       setMessage("ダッシュボードの生成が完了しました。");
     } catch (err) {

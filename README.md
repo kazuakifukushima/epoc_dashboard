@@ -6,6 +6,8 @@ EPOC由来の類似Excelファイルを自動判定し、可視化済みExcelと
 
 ### パターンA: サーバー起動（Excel をその場でアップロード）
 
+> Excel アップロードはブラウザ内で変換するため、サーバー不要で動作します（病歴要約等・症例入力状況一覧・研修医評価票に対応）。
+
 1. **準備**
    ```bash
    cd nextjs-app && npm install
@@ -17,38 +19,30 @@ EPOC由来の類似Excelファイルを自動判定し、可視化済みExcelと
    cd nextjs-app && npm run dev
    ```
 
-3. **ブラウザで http://localhost:3000 を開く**
+3. **ブラウザで http://localhost:3001 を開く**
 
 4. **操作**
    - ファイル形式（経験症候・疾患 / 研修医評価票 / 病歴要約等）を選択
    - Excel ファイル（.xlsx）をドラッグ＆ドロップまたは選択
    - 「ダッシュボードを生成する」をクリック
-   - ダッシュボードが表示される。必要なら Excel レポートをダウンロード
+   - ダッシュボードが表示される
 
 ---
 
-### パターンB: 静的サイト（JSON を読み込む）
+### パターンB: 静的サイト（Excel をその場で変換）
 
-1. **事前に Python で JSON を生成**
-   ```bash
-   cd python
-   python epoc_auto_visualizer.py 症例入力状況一覧.xlsx
-   # → *_visualized.json が出力される
-   ```
-
-2. **静的サイトをビルド＆起動**
+1. **ビルド＆起動**
    ```bash
    cd nextjs-app
    npm install && npm run build:static
    npm run serve:static
    ```
 
-3. **ブラウザで http://localhost:8080 を開く**
+2. **ブラウザで http://localhost:8080 を開く**
 
-4. **操作**
-   - 「JSON ファイルを読み込む」をクリック
-   - 上記で生成した JSON ファイルを選択
-   - ダッシュボードが表示される
+3. **操作**
+   - 病歴要約等・症例入力状況一覧・研修医評価票のいずれかの Excel をアップロード
+   - ダッシュボードが表示される（ブラウザ内で変換、サーバー不要）
 
 ---
 
