@@ -1,0 +1,2 @@
+# Render/Nixpacks: Python のみ使用（nextjs-app の Node 検出を無効化）
+providers = ["python"]
