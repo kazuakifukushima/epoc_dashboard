@@ -986,12 +986,11 @@ function EvaluationDashboard({ data }: { data: any }) {
   const rotationMonthMatrix = React.useMemo(() => {
     if (!data.rotations) return { months: [], residentNames: [], matrix: {} as Record<string, Record<string, any[]>> };
 
-    // 開始日〜終了日の全月リストを返す（日付ずれ耐性: 最大1ヶ月の余裕あり）
+    // 開始月〜終了月の全月リストを返す
     const expandMonths = (start: string, end: string): string[] => {
       const s = new Date(start);
-      const e = new Date(end || start);
       if (isNaN(s.getTime())) return start.length >= 7 ? [start.substring(0, 7)] : [];
-      // 終了日が不正なら開始月のみ
+      const e = new Date(end || start);
       const endDate = isNaN(e.getTime()) ? s : e;
       const result: string[] = [];
       const cur = new Date(s.getFullYear(), s.getMonth(), 1);
@@ -1003,38 +1002,52 @@ function EvaluationDashboard({ data }: { data: any }) {
       return result;
     };
 
-    const monthSet = new Set<string>();
+    // ① 事前クラスタリング：(研修医, 診療科, 開始年月) を同一ローテーションとみなして統合
+    //    終了日はデータ入力ずれによる過剰展開を防ぐため最小値を採用
+    const clusterMap = new Map<string, any>();
     for (const r of data.rotations) {
-      for (const m of expandMonths(r["研修開始日"] ?? "", r["研修終了日"] ?? "")) {
-        monthSet.add(m);
+      const startMonth = (r["研修開始日"] || "").substring(0, 7);
+      const key = `${r["研修医氏名"]}||${r["診療科名"]}||${startMonth}`;
+      if (!clusterMap.has(key)) {
+        clusterMap.set(key, { ...r });
+      } else {
+        const rep = clusterMap.get(key)!;
+        // 評価フラグは OR で統合
+        rep["研修医評価あり"] = rep["研修医評価あり"] || r["研修医評価あり"];
+        rep["指導医評価あり"] = rep["指導医評価あり"] || r["指導医評価あり"];
+        // 終了日は最小値（保守的）で過剰展開を防ぐ
+        if (r["研修終了日"] && rep["研修終了日"] && r["研修終了日"] < rep["研修終了日"]) {
+          rep["研修終了日"] = r["研修終了日"];
+        }
       }
+    }
+    const clustered = Array.from(clusterMap.values());
+
+    // ② 月一覧と研修医名一覧を構築
+    const monthSet = new Set<string>();
+    for (const r of clustered) {
+      for (const m of expandMonths(r["研修開始日"] ?? "", r["研修終了日"] ?? "")) monthSet.add(m);
     }
     const months = Array.from(monthSet).sort();
 
     const residentNames: string[] = [];
-    const seen = new Set<string>();
-    for (const r of data.rotations) {
+    const seenNames = new Set<string>();
+    for (const r of clustered) {
       const name = r["研修医氏名"];
-      if (name && !seen.has(name)) { seen.add(name); residentNames.push(name); }
+      if (name && !seenNames.has(name)) { seenNames.add(name); residentNames.push(name); }
     }
     residentNames.sort();
 
+    // ③ マトリクス構築（クラスタ済みデータを全期間月に展開）
     const matrix: Record<string, Record<string, any[]>> = {};
-    for (const r of data.rotations) {
+    for (const r of clustered) {
       const name = r["研修医氏名"];
       if (!name) continue;
-      const dept = r["診療科名"];
-      const expandedMonths = expandMonths(r["研修開始日"] ?? "", r["研修終了日"] ?? "");
-      for (const month of expandedMonths) {
+      for (const month of expandMonths(r["研修開始日"] ?? "", r["研修終了日"] ?? "")) {
         if (!matrix[name]) matrix[name] = {};
         if (!matrix[name][month]) matrix[name][month] = [];
-        // 同月・同診療科を統合（開始/終了日ずれによる重複を吸収）
-        const existing = matrix[name][month].find((x: any) => x["診療科名"] === dept);
-        if (existing) {
-          existing["研修医評価あり"] = existing["研修医評価あり"] || r["研修医評価あり"];
-          existing["指導医評価あり"] = existing["指導医評価あり"] || r["指導医評価あり"];
-        } else {
-          matrix[name][month].push({ ...r });
+        if (!matrix[name][month].find((x: any) => x["診療科名"] === r["診療科名"])) {
+          matrix[name][month].push(r);
         }
       }
     }
