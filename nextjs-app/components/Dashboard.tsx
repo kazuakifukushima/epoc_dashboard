@@ -1476,22 +1476,23 @@ function EvaluationDashboard({ data }: { data: any }) {
               `<h2>研修月別 ローテーション・評価入力状況</h2>`,
               `<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`,
               `<p>研=研修医評価、指=指導医評価。色付き=入力済、グレー=未入力</p>`,
-              `<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script>`,
               `</body></html>`,
             ].join("");
 
-            // Blob URL方式: ポップアップブロッカーに強く、描画完了後に印刷
-            const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const newWin = window.open(url, "_blank");
-            if (!newWin) {
-              // ポップアップがブロックされた場合はHTMLファイルとしてダウンロード
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = "研修月別ローテーション入力状況.html";
-              a.click();
-            }
-            setTimeout(() => URL.revokeObjectURL(url), 30000);
+            // 非表示 iframe に直接書き込んでから print() — ポップアップ不要・スクリプト制限なし
+            const iframe = document.createElement("iframe");
+            iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:297mm;height:210mm;border:0;";
+            document.body.appendChild(iframe);
+            const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+            if (!doc) { document.body.removeChild(iframe); return; }
+            doc.open();
+            doc.write(html);
+            doc.close();
+            setTimeout(() => {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+              setTimeout(() => { try { document.body.removeChild(iframe); } catch (_) {} }, 2000);
+            }, 600);
           };
 
           return (
