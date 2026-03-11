@@ -985,12 +985,32 @@ function EvaluationDashboard({ data }: { data: any }) {
   // Month-based rotation matrix for all-view cross table
   const rotationMonthMatrix = React.useMemo(() => {
     if (!data.rotations) return { months: [], residentNames: [], matrix: {} as Record<string, Record<string, any[]>> };
+
+    // 開始日〜終了日の全月リストを返す（日付ずれ耐性: 最大1ヶ月の余裕あり）
+    const expandMonths = (start: string, end: string): string[] => {
+      const s = new Date(start);
+      const e = new Date(end || start);
+      if (isNaN(s.getTime())) return start.length >= 7 ? [start.substring(0, 7)] : [];
+      // 終了日が不正なら開始月のみ
+      const endDate = isNaN(e.getTime()) ? s : e;
+      const result: string[] = [];
+      const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+      const last = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+      while (cur <= last) {
+        result.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`);
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      return result;
+    };
+
     const monthSet = new Set<string>();
     for (const r of data.rotations) {
-      const d = r["研修開始日"];
-      if (d && typeof d === "string" && d.length >= 7) monthSet.add(d.substring(0, 7));
+      for (const m of expandMonths(r["研修開始日"] ?? "", r["研修終了日"] ?? "")) {
+        monthSet.add(m);
+      }
     }
     const months = Array.from(monthSet).sort();
+
     const residentNames: string[] = [];
     const seen = new Set<string>();
     for (const r of data.rotations) {
@@ -998,22 +1018,24 @@ function EvaluationDashboard({ data }: { data: any }) {
       if (name && !seen.has(name)) { seen.add(name); residentNames.push(name); }
     }
     residentNames.sort();
+
     const matrix: Record<string, Record<string, any[]>> = {};
     for (const r of data.rotations) {
       const name = r["研修医氏名"];
-      const d = r["研修開始日"];
-      if (!name || !d) continue;
-      const month = d.substring(0, 7);
-      if (!matrix[name]) matrix[name] = {};
-      if (!matrix[name][month]) matrix[name][month] = [];
-      // 同月・同診療科は統合（研修終了日の記入ずれによる重複を吸収）
+      if (!name) continue;
       const dept = r["診療科名"];
-      const existing = matrix[name][month].find((x: any) => x["診療科名"] === dept);
-      if (existing) {
-        existing["研修医評価あり"] = existing["研修医評価あり"] || r["研修医評価あり"];
-        existing["指導医評価あり"] = existing["指導医評価あり"] || r["指導医評価あり"];
-      } else {
-        matrix[name][month].push({ ...r });
+      const expandedMonths = expandMonths(r["研修開始日"] ?? "", r["研修終了日"] ?? "");
+      for (const month of expandedMonths) {
+        if (!matrix[name]) matrix[name] = {};
+        if (!matrix[name][month]) matrix[name][month] = [];
+        // 同月・同診療科を統合（開始/終了日ずれによる重複を吸収）
+        const existing = matrix[name][month].find((x: any) => x["診療科名"] === dept);
+        if (existing) {
+          existing["研修医評価あり"] = existing["研修医評価あり"] || r["研修医評価あり"];
+          existing["指導医評価あり"] = existing["指導医評価あり"] || r["指導医評価あり"];
+        } else {
+          matrix[name][month].push({ ...r });
+        }
       }
     }
     return { months, residentNames, matrix };
