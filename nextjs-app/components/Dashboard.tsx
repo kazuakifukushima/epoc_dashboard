@@ -11,8 +11,9 @@ import {
   AlertCircle, FileText, Activity, Users, ClipboardCheck,
   CheckSquare, TrendingUp, TrendingDown, ChevronRight,
   ChevronLeft, ChevronUp, ChevronDown, AlertTriangle, Award, BookOpen, Stethoscope,
-  BarChart2, ShieldCheck, Check, X,
+  BarChart2, ShieldCheck, Check, X, Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 // ============================================================
 // Design Tokens
@@ -1005,7 +1006,15 @@ function EvaluationDashboard({ data }: { data: any }) {
       const month = d.substring(0, 7);
       if (!matrix[name]) matrix[name] = {};
       if (!matrix[name][month]) matrix[name][month] = [];
-      matrix[name][month].push(r);
+      // 同月・同診療科は統合（研修終了日の記入ずれによる重複を吸収）
+      const dept = r["診療科名"];
+      const existing = matrix[name][month].find((x: any) => x["診療科名"] === dept);
+      if (existing) {
+        existing["研修医評価あり"] = existing["研修医評価あり"] || r["研修医評価あり"];
+        existing["指導医評価あり"] = existing["指導医評価あり"] || r["指導医評価あり"];
+      } else {
+        matrix[name][month].push({ ...r });
+      }
     }
     return { months, residentNames, matrix };
   }, [data.rotations]);
@@ -1340,9 +1349,70 @@ function EvaluationDashboard({ data }: { data: any }) {
         </Card>
 
         {/* Rotation Month Matrix */}
-        {rotationMonthMatrix.months.length > 0 && (
+        {rotationMonthMatrix.months.length > 0 && (() => {
+          const downloadExcel = () => {
+            const { months, residentNames, matrix } = rotationMonthMatrix;
+            const header = ["研修医", ...months.map(m => m.replace("-", "/"))];
+            const rows = residentNames.map(name => {
+              const row: any[] = [name];
+              for (const month of months) {
+                const rots: any[] = (matrix[name] && matrix[name][month]) || [];
+                if (rots.length === 0) { row.push(""); continue; }
+                row.push(rots.map(r => {
+                  const res = r["研修医評価あり"] ? "研○" : "研✗";
+                  const sup = r["指導医評価あり"] ? "指○" : "指✗";
+                  return `${r["診療科名"] || "—"} [${res} ${sup}]`;
+                }).join(" / "));
+              }
+              return row;
+            });
+            const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+            // 列幅設定
+            ws["!cols"] = [{ wch: 14 }, ...months.map(() => ({ wch: 20 }))];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "研修月別ローテーション");
+            XLSX.writeFile(wb, "研修月別ローテーション入力状況.xlsx");
+          };
+
+          const downloadPDF = () => {
+            const { months, residentNames, matrix } = rotationMonthMatrix;
+            const thStyle = "padding:6px 8px;border:1px solid #cbd5e1;background:#f1f5f9;font-size:11px;white-space:nowrap;text-align:center;font-weight:600;color:#374151;";
+            const tdStyle = "padding:5px 7px;border:1px solid #cbd5e1;font-size:10px;vertical-align:top;";
+            const headerCells = [`<th style="${thStyle}text-align:left;">研修医</th>`,
+              ...months.map(m => `<th style="${thStyle}">${m.replace("-", "/")}</th>`)].join("");
+            const bodyRows = residentNames.map(name => {
+              const cells = months.map(month => {
+                const rots: any[] = (matrix[name] && matrix[name][month]) || [];
+                if (rots.length === 0) return `<td style="${tdStyle}color:#cbd5e1;">—</td>`;
+                const content = rots.map(r => {
+                  const resBg = r["研修医評価あり"] ? "#16a34a" : "#e2e8f0";
+                  const supBg = r["指導医評価あり"] ? "#7c3aed" : "#e2e8f0";
+                  const resFg = r["研修医評価あり"] ? "#fff" : "#9ca3af";
+                  const supFg = r["指導医評価あり"] ? "#fff" : "#9ca3af";
+                  return `<div style="margin-bottom:2px;"><b style="font-size:10px;">${r["診療科名"] || "—"}</b><span style="margin-left:4px;display:inline-block;width:14px;height:14px;border-radius:3px;background:${resBg};color:${resFg};font-size:8px;font-weight:700;text-align:center;line-height:14px;">研</span><span style="margin-left:2px;display:inline-block;width:14px;height:14px;border-radius:3px;background:${supBg};color:${supFg};font-size:8px;font-weight:700;text-align:center;line-height:14px;">指</span></div>`;
+                }).join("");
+                return `<td style="${tdStyle}">${content}</td>`;
+              }).join("");
+              return `<tr><td style="${tdStyle}font-weight:700;white-space:nowrap;">${name}</td>${cells}</tr>`;
+            }).join("");
+            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>研修月別ローテーション入力状況</title><style>@page{size:A3 landscape;margin:12mm}body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;}h2{font-size:14px;margin-bottom:8px;}table{border-collapse:collapse;width:100%;}p{font-size:10px;color:#64748b;margin-top:8px;}</style></head><body><h2>研修月別 ローテーション・評価入力状況</h2><table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table><p>研=研修医評価、指=指導医評価。○=入力済、✗=未入力</p></body></html>`;
+            const w = window.open("", "_blank");
+            if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
+          };
+
+          return (
           <Card style={{ marginTop: 24 }}>
-            <SectionTitle icon={Activity} label="研修月別 ローテーション・評価入力状況" color={C.purple} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+              <SectionTitle icon={Activity} label="研修月別 ローテーション・評価入力状況" color={C.purple} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={downloadExcel} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: `1.5px solid ${C.greenBorder}`, background: C.greenSoft, color: C.green, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+                  <Download size={14} />Excel
+                </button>
+                <button onClick={downloadPDF} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: `1.5px solid ${C.purpleBorder}`, background: C.purpleSoft, color: C.purple, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+                  <Download size={14} />印刷/PDF
+                </button>
+              </div>
+            </div>
             {/* Legend */}
             <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
               {[
@@ -1448,7 +1518,8 @@ function EvaluationDashboard({ data }: { data: any }) {
               ※ 研=研修医評価、指=指導医評価。緑=両方入力済、黄=片方のみ、赤=未入力。行をクリックすると個人詳細を表示。
             </div>
           </Card>
-        )}
+          );
+        })()}
         </>
       ) : (
         /* Individual Alert Table */
