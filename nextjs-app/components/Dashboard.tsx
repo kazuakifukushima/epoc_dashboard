@@ -986,15 +986,38 @@ function EvaluationDashboard({ data }: { data: any }) {
   const rotationMonthMatrix = React.useMemo(() => {
     if (!data.rotations) return { months: [], residentNames: [], matrix: {} as Record<string, Record<string, any[]>> };
 
-    // 開始月〜終了月の全月リストを返す
+    // 月末7日以内の開始日 → 翌月扱い（例: 3/28開始 → 4月から）
+    const normalizeStartMonth = (dateStr: string): string => {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return (dateStr || "").substring(0, 7);
+      const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      if (d.getDate() >= daysInMonth - 6) {
+        const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+        return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+      }
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+
+    // 月初7日以内の終了日 → 前月扱い（例: 6/3終了 → 5月まで）
+    const normalizeEndMonth = (dateStr: string): string => {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return (dateStr || "").substring(0, 7);
+      if (d.getDate() <= 7) {
+        const prev = new Date(d.getFullYear(), d.getMonth(), 0);
+        return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+      }
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+
+    // 正規化済み開始月〜終了月の全月リストを返す
     const expandMonths = (start: string, end: string): string[] => {
-      const s = new Date(start);
-      if (isNaN(s.getTime())) return start.length >= 7 ? [start.substring(0, 7)] : [];
-      const e = new Date(end || start);
-      const endDate = isNaN(e.getTime()) ? s : e;
+      const startM = normalizeStartMonth(start);
+      const endM   = end ? normalizeEndMonth(end) : startM;
+      if (!startM) return [];
+      // 正規化の結果 endM < startM になる場合（超短期ローテーション）は startM のみ
       const result: string[] = [];
-      const cur = new Date(s.getFullYear(), s.getMonth(), 1);
-      const last = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+      const cur  = new Date(`${startM}-01`);
+      const last = new Date(`${(endM >= startM ? endM : startM)}-01`);
       while (cur <= last) {
         result.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`);
         cur.setMonth(cur.getMonth() + 1);
@@ -1002,11 +1025,11 @@ function EvaluationDashboard({ data }: { data: any }) {
       return result;
     };
 
-    // ① 事前クラスタリング：(研修医, 診療科, 開始年月) を同一ローテーションとみなして統合
+    // ① 事前クラスタリング：(研修医, 診療科, 正規化開始月) を同一ローテーションとみなして統合
     //    終了日はデータ入力ずれによる過剰展開を防ぐため最小値を採用
     const clusterMap = new Map<string, any>();
     for (const r of data.rotations) {
-      const startMonth = (r["研修開始日"] || "").substring(0, 7);
+      const startMonth = normalizeStartMonth(r["研修開始日"] || "");
       const key = `${r["研修医氏名"]}||${r["診療科名"]}||${startMonth}`;
       if (!clusterMap.has(key)) {
         clusterMap.set(key, { ...r });
