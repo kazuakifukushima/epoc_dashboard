@@ -1436,8 +1436,10 @@ function EvaluationDashboard({ data }: { data: any }) {
             const { months, residentNames, matrix } = rotationMonthMatrix;
             const thStyle = "padding:6px 8px;border:1px solid #cbd5e1;background:#f1f5f9;font-size:11px;white-space:nowrap;text-align:center;font-weight:600;color:#374151;";
             const tdStyle = "padding:5px 7px;border:1px solid #cbd5e1;font-size:10px;vertical-align:top;";
-            const headerCells = [`<th style="${thStyle}text-align:left;">研修医</th>`,
-              ...months.map(m => `<th style="${thStyle}">${m.replace("-", "/")}</th>`)].join("");
+            const headerCells = [
+              `<th style="${thStyle}text-align:left;">研修医</th>`,
+              ...months.map(m => `<th style="${thStyle}">${m.replace("-", "/")}</th>`),
+            ].join("");
             const bodyRows = residentNames.map(name => {
               const cells = months.map(month => {
                 const rots: any[] = (matrix[name] && matrix[name][month]) || [];
@@ -1447,15 +1449,49 @@ function EvaluationDashboard({ data }: { data: any }) {
                   const supBg = r["指導医評価あり"] ? "#7c3aed" : "#e2e8f0";
                   const resFg = r["研修医評価あり"] ? "#fff" : "#9ca3af";
                   const supFg = r["指導医評価あり"] ? "#fff" : "#9ca3af";
-                  return `<div style="margin-bottom:2px;"><b style="font-size:10px;">${r["診療科名"] || "—"}</b><span style="margin-left:4px;display:inline-block;width:14px;height:14px;border-radius:3px;background:${resBg};color:${resFg};font-size:8px;font-weight:700;text-align:center;line-height:14px;">研</span><span style="margin-left:2px;display:inline-block;width:14px;height:14px;border-radius:3px;background:${supBg};color:${supFg};font-size:8px;font-weight:700;text-align:center;line-height:14px;">指</span></div>`;
+                  return [
+                    `<div style="margin-bottom:3px;">`,
+                    `<span style="font-size:10px;font-weight:700;">${r["診療科名"] || "—"}</span>`,
+                    `<span style="margin-left:4px;display:inline-block;width:14px;height:14px;border-radius:3px;background:${resBg};color:${resFg};font-size:8px;font-weight:700;text-align:center;line-height:14px;">研</span>`,
+                    `<span style="margin-left:2px;display:inline-block;width:14px;height:14px;border-radius:3px;background:${supBg};color:${supFg};font-size:8px;font-weight:700;text-align:center;line-height:14px;">指</span>`,
+                    `</div>`,
+                  ].join("");
                 }).join("");
                 return `<td style="${tdStyle}">${content}</td>`;
               }).join("");
               return `<tr><td style="${tdStyle}font-weight:700;white-space:nowrap;">${name}</td>${cells}</tr>`;
             }).join("");
-            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>研修月別ローテーション入力状況</title><style>@page{size:A3 landscape;margin:12mm}body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;}h2{font-size:14px;margin-bottom:8px;}table{border-collapse:collapse;width:100%;}p{font-size:10px;color:#64748b;margin-top:8px;}</style></head><body><h2>研修月別 ローテーション・評価入力状況</h2><table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table><p>研=研修医評価、指=指導医評価。○=入力済、✗=未入力</p></body></html>`;
-            const w = window.open("", "_blank");
-            if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
+
+            const html = [
+              `<!DOCTYPE html><html><head><meta charset="utf-8">`,
+              `<title>研修月別ローテーション入力状況</title>`,
+              `<style>`,
+              `@page{size:A3 landscape;margin:12mm}`,
+              `*{-webkit-print-color-adjust:exact;print-color-adjust:exact}`,
+              `body{font-family:"Helvetica Neue",Arial,"Hiragino Sans","Meiryo",sans-serif;font-size:11px;margin:0}`,
+              `h2{font-size:13px;margin:0 0 8px}`,
+              `table{border-collapse:collapse;width:100%}`,
+              `p{font-size:9px;color:#64748b;margin-top:6px}`,
+              `</style></head><body>`,
+              `<h2>研修月別 ローテーション・評価入力状況</h2>`,
+              `<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`,
+              `<p>研=研修医評価、指=指導医評価。色付き=入力済、グレー=未入力</p>`,
+              `<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script>`,
+              `</body></html>`,
+            ].join("");
+
+            // Blob URL方式: ポップアップブロッカーに強く、描画完了後に印刷
+            const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const newWin = window.open(url, "_blank");
+            if (!newWin) {
+              // ポップアップがブロックされた場合はHTMLファイルとしてダウンロード
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "研修月別ローテーション入力状況.html";
+              a.click();
+            }
+            setTimeout(() => URL.revokeObjectURL(url), 30000);
           };
 
           return (
