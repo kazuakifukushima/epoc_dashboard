@@ -981,6 +981,35 @@ function EvaluationDashboard({ data }: { data: any }) {
     return map;
   }, [data.rotations]);
 
+  // Month-based rotation matrix for all-view cross table
+  const rotationMonthMatrix = React.useMemo(() => {
+    if (!data.rotations) return { months: [], residentNames: [], matrix: {} as Record<string, Record<string, any[]>> };
+    const monthSet = new Set<string>();
+    for (const r of data.rotations) {
+      const d = r["研修開始日"];
+      if (d && typeof d === "string" && d.length >= 7) monthSet.add(d.substring(0, 7));
+    }
+    const months = Array.from(monthSet).sort();
+    const residentNames: string[] = [];
+    const seen = new Set<string>();
+    for (const r of data.rotations) {
+      const name = r["研修医氏名"];
+      if (name && !seen.has(name)) { seen.add(name); residentNames.push(name); }
+    }
+    residentNames.sort();
+    const matrix: Record<string, Record<string, any[]>> = {};
+    for (const r of data.rotations) {
+      const name = r["研修医氏名"];
+      const d = r["研修開始日"];
+      if (!name || !d) continue;
+      const month = d.substring(0, 7);
+      if (!matrix[name]) matrix[name] = {};
+      if (!matrix[name][month]) matrix[name][month] = [];
+      matrix[name][month].push(r);
+    }
+    return { months, residentNames, matrix };
+  }, [data.rotations]);
+
   const scoreColor = (s: number) => s === 0 ? C.red : s < 2 ? C.amber : s >= 3.5 ? C.green : C.slate700;
 
   return (
@@ -1182,6 +1211,7 @@ function EvaluationDashboard({ data }: { data: any }) {
       )}
 
       {selected === "all" ? (
+        <>
         <Card>
           <SectionTitle icon={Users} label="研修医別 評価・入力状況サマリー" color={C.purple} />
           {/* Legend */}
@@ -1308,6 +1338,118 @@ function EvaluationDashboard({ data }: { data: any }) {
             ※ A/B/C は指導医評価のコンピテンシー別平均点。行をクリックすると個人詳細を表示。
           </div>
         </Card>
+
+        {/* Rotation Month Matrix */}
+        {rotationMonthMatrix.months.length > 0 && (
+          <Card style={{ marginTop: 24 }}>
+            <SectionTitle icon={Activity} label="研修月別 ローテーション・評価入力状況" color={C.purple} />
+            {/* Legend */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+              {[
+                { bg: C.green, label: "研" },
+                { bg: C.purple, label: "指" },
+              ].map(({ bg, label }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.slate500 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: 3, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff" }}>{label}</div>
+                  {label === "研" ? "研修医評価 入力済" : "指導医評価 入力済"}
+                </div>
+              ))}
+              {[
+                { label: "研", isRes: true },
+                { label: "指", isRes: false },
+              ].map(({ label, isRes }, i) => (
+                <div key={`empty-${i}`} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.slate500 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: 3, background: C.slate100, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: C.slate500 }}>{label}</div>
+                  {isRes ? "研修医評価 未入力" : "指導医評価 未入力"}
+                </div>
+              ))}
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 600 }}>
+                <thead>
+                  <tr style={{ borderBottom: `2px solid ${C.slate100}` }}>
+                    <th style={{ padding: "8px 12px", textAlign: "left", color: C.slate500, fontWeight: 600, fontSize: 12, whiteSpace: "nowrap", position: "sticky", left: 0, background: C.white, zIndex: 1 }}>
+                      研修医
+                    </th>
+                    {rotationMonthMatrix.months.map(m => (
+                      <th key={m} style={{ padding: "8px 10px", textAlign: "center", color: C.slate500, fontWeight: 600, fontSize: 11, whiteSpace: "nowrap", minWidth: 80 }}>
+                        {m.replace("-", "/")}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rotationMonthMatrix.residentNames.map((name, ri) => (
+                    <tr key={ri} style={{ borderBottom: `1px solid ${C.slate100}`, cursor: "pointer" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = C.purpleSoft)}
+                      onMouseLeave={e => (e.currentTarget.style.background = "")}
+                      onClick={() => setSelected(name)}
+                    >
+                      <td style={{ padding: "8px 12px", fontWeight: 700, color: C.purple, whiteSpace: "nowrap", position: "sticky", left: 0, background: "inherit", zIndex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ width: 22, height: 22, borderRadius: 99, background: C.purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: C.white, flexShrink: 0 }}>{(name || "?")[0]}</div>
+                          {name}
+                        </div>
+                      </td>
+                      {rotationMonthMatrix.months.map(month => {
+                        const rotations: any[] = (rotationMonthMatrix.matrix[name] && rotationMonthMatrix.matrix[name][month]) || [];
+                        if (rotations.length === 0) {
+                          return <td key={month} style={{ padding: "6px 10px", textAlign: "center" }}><span style={{ color: C.slate300, fontSize: 11 }}>—</span></td>;
+                        }
+                        return (
+                          <td key={month} style={{ padding: "6px 8px", verticalAlign: "top" }}>
+                            {rotations.map((rot, j) => {
+                              const hasRes = rot["研修医評価あり"];
+                              const hasSup = rot["指導医評価あり"];
+                              const allOk = hasRes && hasSup;
+                              const noneOk = !hasRes && !hasSup;
+                              const cellBg = allOk ? C.greenSoft : noneOk ? C.redSoft : C.amberSoft;
+                              const cellBorder = allOk ? C.greenBorder : noneOk ? C.redBorder : C.amberBorder;
+                              return (
+                                <div key={j} style={{
+                                  marginBottom: j < rotations.length - 1 ? 4 : 0,
+                                  padding: "4px 6px",
+                                  borderRadius: 6,
+                                  background: cellBg,
+                                  border: `1px solid ${cellBorder}`,
+                                  minWidth: 72,
+                                }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: C.slate900, whiteSpace: "nowrap", marginBottom: 3 }}>
+                                    {rot["診療科名"] || "—"}
+                                  </div>
+                                  <div style={{ display: "flex", gap: 3 }}>
+                                    <div title={hasRes ? "研修医評価入力済" : "研修医評価未入力"} style={{
+                                      width: 16, height: 16, borderRadius: 3,
+                                      background: hasRes ? C.green : C.slate100,
+                                      display: "flex", alignItems: "center", justifyContent: "center",
+                                      fontSize: 9, fontWeight: 700,
+                                      color: hasRes ? "#fff" : C.slate500,
+                                    }}>研</div>
+                                    <div title={hasSup ? "指導医評価入力済" : "指導医評価未入力"} style={{
+                                      width: 16, height: 16, borderRadius: 3,
+                                      background: hasSup ? C.purple : C.slate100,
+                                      display: "flex", alignItems: "center", justifyContent: "center",
+                                      fontSize: 9, fontWeight: 700,
+                                      color: hasSup ? "#fff" : C.slate500,
+                                    }}>指</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop: 12, fontSize: 11, color: C.slate500 }}>
+              ※ 研=研修医評価、指=指導医評価。緑=両方入力済、黄=片方のみ、赤=未入力。行をクリックすると個人詳細を表示。
+            </div>
+          </Card>
+        )}
+        </>
       ) : (
         /* Individual Alert Table */
         filteredAlerts.length > 0 && (
