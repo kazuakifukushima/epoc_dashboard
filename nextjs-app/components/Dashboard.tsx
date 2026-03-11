@@ -986,23 +986,23 @@ function EvaluationDashboard({ data }: { data: any }) {
   const rotationMonthMatrix = React.useMemo(() => {
     if (!data.rotations) return { months: [], residentNames: [], matrix: {} as Record<string, Record<string, any[]>> };
 
-    // 月末7日以内の開始日 → 翌月扱い（例: 3/28開始 → 4月から）
+    // 月末14日以内の開始日 → 翌月扱い（例: 3/20開始 → 4月から）
     const normalizeStartMonth = (dateStr: string): string => {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return (dateStr || "").substring(0, 7);
       const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      if (d.getDate() >= daysInMonth - 6) {
+      if (d.getDate() >= daysInMonth - 13) {
         const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
         return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
       }
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     };
 
-    // 月初7日以内の終了日 → 前月扱い（例: 6/3終了 → 5月まで）
+    // 月初14日以内の終了日 → 前月扱い（例: 6/10終了 → 5月まで）
     const normalizeEndMonth = (dateStr: string): string => {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return (dateStr || "").substring(0, 7);
-      if (d.getDate() <= 7) {
+      if (d.getDate() <= 14) {
         const prev = new Date(d.getFullYear(), d.getMonth(), 0);
         return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
       }
