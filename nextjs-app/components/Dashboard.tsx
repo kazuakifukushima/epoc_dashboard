@@ -377,6 +377,36 @@ function SymptomDiseaseDashboard({ data }: { data: any }) {
     (data.residents || []).map((r: any) => r["研修医氏名"])
   )).filter(Boolean).sort() as string[];
 
+  const downloadCategoryExcel = (category: "症候" | "疾患") => {
+    const items = (data.items || []) as any[];
+    const catItems = items.filter((i: any) => i["区分"] === category);
+    const itemNames = Array.from(new Set(catItems.map((i: any) => i["項目名"] as string))).filter(Boolean).sort();
+    const residents = Array.from(new Set(catItems.map((i: any) => i["研修医氏名"] as string))).filter(Boolean).sort();
+
+    const statusMap = new Map<string, string>();
+    for (const r of catItems) {
+      statusMap.set(`${r["研修医氏名"]}\t${r["項目名"]}`, r["状態"] || "未経験");
+    }
+
+    const header = ["研修医氏名", "達成率(%)", ...itemNames];
+    const rows = residents.map(name => {
+      let achieved = 0;
+      const cells = itemNames.map(item => {
+        const s = statusMap.get(`${name}\t${item}`) || "—";
+        if (s === "達成") achieved++;
+        return s;
+      });
+      const rate = itemNames.length > 0 ? Math.round((achieved / itemNames.length) * 100) : 0;
+      return [name, rate, ...cells];
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws["!cols"] = [{ wch: 16 }, { wch: 10 }, ...itemNames.map(() => ({ wch: 14 }))];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, category);
+    XLSX.writeFile(wb, `経験${category}_全研修医一覧.xlsx`);
+  };
+
   const allResidents = [...(data.residents || [])].sort(
     (a: any, b: any) => (b["要対応件数"] || 0) - (a["要対応件数"] || 0)
   );
@@ -431,7 +461,21 @@ function SymptomDiseaseDashboard({ data }: { data: any }) {
             <div style={{ fontSize: 12, color: C.slate500 }}>症例入力・経験項目の達成状況をリアルタイムに把握</div>
           </div>
         </div>
-        <ResidentSelector names={names} selected={selected} onChange={setSelected} accentColor={C.blue} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <button
+            onClick={() => downloadCategoryExcel("症候")}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: `1.5px solid ${C.blueBorder}`, background: C.blueSoft, color: C.blue, fontWeight: 600, fontSize: 12, cursor: "pointer" }}
+          >
+            <Download size={14} />症候 Excel
+          </button>
+          <button
+            onClick={() => downloadCategoryExcel("疾患")}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: `1.5px solid ${C.purpleBorder}`, background: C.purpleSoft, color: C.purple, fontWeight: 600, fontSize: 12, cursor: "pointer" }}
+          >
+            <Download size={14} />疾患 Excel
+          </button>
+          <ResidentSelector names={names} selected={selected} onChange={setSelected} accentColor={C.blue} />
+        </div>
       </div>
 
       {/* Stat Cards */}
